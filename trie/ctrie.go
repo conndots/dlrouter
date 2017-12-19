@@ -1,6 +1,9 @@
 package trie
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type NodeType uint8
 
@@ -9,29 +12,36 @@ const (
 	NodeTypeLeaf    NodeType = 2
 	NodeTypeDefault NodeType = 1
 	NodeTypeVar     NodeType = 3
+
+	varSymbol = ':'
 )
 
-type Var struct {
-	name  string
-	value string
+var (
+	valID = uint(0)
+)
+type target struct {
+	valID uint
+	value interface{}
+	pathVars []string
 }
 
 type CTrie struct {
 	childrenIdx map[byte]*CTrie
 	Size        int
 
-	LeafValues []interface{}
+	LeafValues []*target
 	path       string
 	nodeType   NodeType
-	pathVar    *Var
+	pathVars   []string
 }
 
 func NewCompressedTrie() *CTrie {
 	return &CTrie{
 		childrenIdx: make(map[byte]*CTrie),
 		Size:        0,
-		LeafValues:  make([]interface{}, 0, 1),
+		LeafValues:  make([]*target, 0, 1),
 		nodeType:    NodeTypeRoot,
+		pathVars:    make([]string, 0, 0),
 	}
 }
 
@@ -42,7 +52,14 @@ func min(a, b int) int {
 	return b
 }
 
-func (ct *CTrie) Add(str string, value interface{}) {
+func (ct *CTrie) Add(str string, value interface{}) error {
+	valID++
+	tar := target{
+		valID: valID,
+		value: value,
+		pathVars: make([]string, 0, 0),
+	}
+
 	ct.Size++
 	if len(ct.path) > 0 || len(ct.childrenIdx) > 0 {
 	loopStart:
@@ -58,7 +75,7 @@ func (ct *CTrie) Add(str string, value interface{}) {
 					childrenIdx: ct.childrenIdx,
 					path:        ct.path[diffSt:],
 					Size:        ct.Size,
-					LeafValues:  append([]interface{}{}, ct.LeafValues...),
+					LeafValues:  append([]*target, ct.LeafValues...),
 					nodeType:    ct.nodeType,
 				}
 				if ct.nodeType == NodeTypeRoot {
@@ -75,37 +92,70 @@ func (ct *CTrie) Add(str string, value interface{}) {
 				if ct.nodeType == NodeTypeLeaf {
 					ct.nodeType = NodeTypeDefault
 				}
-				ct.LeafValues = make([]interface{}, 0, 0)
+				ct.LeafValues = make([]*target, 0, 0)
 			}
 
 			if diffSt < len(str) { //str has diff
-				str = str[diffSt:]
-				c := str[0]
+				if str[diffSt] != varSymbol {
+					str = str[diffSt:]
+					c := str[0]
 
-				sub, existed := ct.childrenIdx[c]
-				if existed {
-					ct = sub
-					continue loopStart
+					sub, existed := ct.childrenIdx[c]
+					if existed {
+						ct = sub
+						continue loopStart
+					}
+
+					//add to a new child
+					child := &CTrie{
+						LeafValues: []*target{&tar},
+						nodeType:   NodeTypeLeaf,
+						path:       str,
+						Size:       1,
+					}
+					if ct.childrenIdx == nil {
+						ct.childrenIdx = make(map[byte]*CTrie)
+					}
+					ct.childrenIdx[c] = child
+					return nil
+				} else { //next part is a path Variable
+					str = str[diffSt:]
+					pos := strings.IndexByte(str, '/')
+					pathVar := ""
+					leafValues := make([]*target, 0, 1)
+					if pos == -1 {
+						str = ""
+						pathVar = fmt.Sprintf("%d_%s", tar.valID, str[1:])
+						tar.pathVars = append(tar.pathVars, pathVar)
+						leafValues = append(leafValues, tar)
+					} else {
+						pathVar = fmt.Sprintf("%d_%s", tar.valID, str[1:pos])
+						tar.pathVars = append(tar.pathVars, pathVar)
+						str = str[pos:]
+					}
+
+					sub, existed := ct.childrenIdx[varSymbol]
+					if existed {
+						ct = sub
+						ct.pathVars = append(ct.pathVars, pathVar)
+						continue loopStart
+					}
+
+					child := &CTrie{
+						LeafValues: leafValues,
+						path: "",
+						nodeType: NodeTypeVar,
+						Size: len(leafValues),
+						pathVars: append(make([]string, 0, 1), pathVar),
+					}
 				}
 
-				//add to a new child
-				child := &CTrie{
-					LeafValues: []interface{}{value},
-					nodeType:   NodeTypeLeaf,
-					path:       str,
-					Size:       1,
-				}
-				if ct.childrenIdx == nil {
-					ct.childrenIdx = make(map[byte]*CTrie)
-				}
-				ct.childrenIdx[c] = child
-				return
 			} else if diffSt == len(str) {
-				ct.LeafValues = append(ct.LeafValues, value)
+				ct.LeafValues = append(ct.LeafValues, &tar)
 				if ct.nodeType != NodeTypeRoot {
 					ct.nodeType = NodeTypeLeaf
 				}
-				return
+				return nil
 			}
 		}
 	} else {
