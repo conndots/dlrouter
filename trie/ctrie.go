@@ -3,6 +3,7 @@ package trie
 import (
 	"fmt"
 	"strings"
+	"github.com/golang-collections/collections/queue"
 )
 
 type NodeType uint8
@@ -23,6 +24,11 @@ type target struct {
 	valID uint
 	value interface{}
 	pathVars []string
+}
+
+type TargetCandidate struct {
+	Value interface{}
+	Variables map[string]string
 }
 
 type CTrie struct {
@@ -96,7 +102,7 @@ func (ct *CTrie) Add(str string, value interface{}) error {
 			}
 
 			if diffSt < len(str) { //str has diff
-				if str[diffSt] != varSymbol {
+				if str[diffSt] != varSymbol { //normal string
 					str = str[diffSt:]
 					c := str[0]
 
@@ -123,11 +129,11 @@ func (ct *CTrie) Add(str string, value interface{}) error {
 					pos := strings.IndexByte(str, '/')
 					pathVar := ""
 					leafValues := make([]*target, 0, 1)
-					if pos == -1 {
+					if pos == -1 { //the last element
 						str = ""
 						pathVar = fmt.Sprintf("%d_%s", tar.valID, str[1:])
 						tar.pathVars = append(tar.pathVars, pathVar)
-						leafValues = append(leafValues, tar)
+						leafValues = append(leafValues, &tar)
 					} else {
 						pathVar = fmt.Sprintf("%d_%s", tar.valID, str[1:pos])
 						tar.pathVars = append(tar.pathVars, pathVar)
@@ -136,9 +142,16 @@ func (ct *CTrie) Add(str string, value interface{}) error {
 
 					sub, existed := ct.childrenIdx[varSymbol]
 					if existed {
+						if sub.nodeType != NodeTypeVar {
+							return fmt.Errorf("wrong node type %d, expected %d", sub.nodeType, NodeTypeVar)
+						}
 						ct = sub
 						ct.pathVars = append(ct.pathVars, pathVar)
-						continue loopStart
+						if len(str) > 0 {
+							continue loopStart
+						} else {
+							return nil
+						}
 					}
 
 					child := &CTrie{
@@ -146,7 +159,15 @@ func (ct *CTrie) Add(str string, value interface{}) error {
 						path: "",
 						nodeType: NodeTypeVar,
 						Size: len(leafValues),
-						pathVars: append(make([]string, 0, 1), pathVar),
+						pathVars: []string{pathVar},
+					}
+					if ct.childrenIdx == nil {
+						ct.childrenIdx = make(map[byte]*CTrie)
+					}
+					ct.childrenIdx[varSymbol] = child
+
+					if len(str) == 0 {
+						return nil
 					}
 				}
 
@@ -160,60 +181,49 @@ func (ct *CTrie) Add(str string, value interface{}) error {
 		}
 	} else {
 		ct.path = str
-		ct.LeafValues = append(ct.LeafValues, value)
+		ct.LeafValues = append(ct.LeafValues, &tar)
 		ct.nodeType = NodeTypeRoot
 	}
+	return nil
 }
 
-func (ct *CTrie) GetCandidateLeafs(target string) (candidates []interface{}, fullMatch bool) {
-	candidates = make([]interface{}, 0, 2)
+type searchContext struct {
+	node *CTrie
+	partialTarget string
+}
+
+func (ct *CTrie) GetCandidateLeafs(target string) (candidates []*TargetCandidate) {
+	candidates = make([]*TargetCandidate, 0, 2)
 	if len(target) == 0 {
-		fullMatch = false
 		return
 	}
+
 	defer func() {
 		//reverse it, because the longest match matters.
 		for st, end := 0, len(candidates)-1; st < end; st, end = st+1, end-1 {
 			candidates[st], candidates[end] = candidates[end], candidates[st]
 		}
 	}()
-	tlen := len(target)
 
-	for {
-		if ct.path == target {
-			candidates = append(candidates, ct.LeafValues...)
-			fullMatch = true
-			return
-		} else if tlen < len(ct.path) {
-			fullMatch = false
-			return
-		} else {
-			st := 0
-			ctlen := len(ct.path)
-			tlen := len(target)
-			for st < ctlen && st < tlen && ct.path[st] == target[st] {
-				st++
-			}
-			if st == tlen || st != ctlen {
-				fullMatch = false
-				return
-			}
-			target = target[st:]
-			if ct.nodeType == NodeTypeLeaf || (len(ct.LeafValues) > 0 && ct.nodeType == NodeTypeRoot) {
-				candidates = append(candidates, ct.LeafValues...)
-			}
-			c := target[0]
-			sub, existed := ct.childrenIdx[c]
-			if existed {
-				ct = sub
-			} else {
-				fullMatch = false
-				return
+	squeue := queue.New()
+	squeue.Enqueue(&searchContext{ct, target})
+
+	vars := make(map[string]string)
+
+	for squeue.Len() > 0 {
+		curr := squeue.Dequeue().(*searchContext)
+		node := curr.node
+		t := curr.partialTarget
+
+		switch node.nodeType {
+		case NodeTypeVar:
+			end := strings.IndexByte(t, '/')
+			if end == -1 {
+
 			}
 		}
 	}
 }
-
 func (ct *CTrie) Print() {
 	type Node struct {
 		node  *CTrie
