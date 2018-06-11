@@ -1,7 +1,9 @@
 package dlrouter
 
 import (
+	"fmt"
 	"testing"
+
 	"gopkg.in/yaml.v2"
 )
 
@@ -33,6 +35,7 @@ var test0Conf = `- domains:
     - = /api/hotsoon/video/list
     - /api/hotsoon/video/comment
     - ~ /api/hotsoon/video/detail/[0-9]+
+    - = /common/api/
     - /admin
 `
 var test1Conf = `- domains:
@@ -40,6 +43,7 @@ var test1Conf = `- domains:
     - neihan.toutiao.com
     - products.byted.org
   locations:
+    - = /common/api/
     - = /api/account/info
     - = /api/video/info
     - /api/user
@@ -67,18 +71,21 @@ var test1Conf = `- domains:
 `
 var testData = []*LocationConf{
 	&LocationConf{
-		Target: 1,
+		Target:      1,
 		MappingConf: getConfFromYaml(test0Conf),
 	},
 	&LocationConf{
-		Target: 2,
+		Target:      2,
 		MappingConf: getConfFromYaml(test1Conf),
 	},
 }
 
 func getConfFromYaml(yamlConf string) []*MappingBlock {
 	var blocks []*MappingBlock
-	yaml.Unmarshal([]byte(yamlConf), &blocks)
+	err := yaml.Unmarshal([]byte(yamlConf), &blocks)
+	if err != nil {
+		fmt.Println(err)
+	}
 	return blocks
 }
 
@@ -109,6 +116,10 @@ func TestGetAllTarget(t *testing.T) {
 
 	targets, exist = sm.GetAllTargets("products.byted.org", "/page/common/tt1234937432/3123")
 	if !exist || len(targets) != 1 || !sliceHas(targets, 1) {
+		t.Errorf("get all targets error. targets=%v", targets)
+	}
+	targets, exist = sm.GetAllTargets("products.byted.org", "/common/api/")
+	if !exist || len(targets) != 2 || !sliceHas(targets, 1) || !sliceHas(targets, 2) {
 		t.Errorf("get all targets error. targets=%v", targets)
 	}
 }

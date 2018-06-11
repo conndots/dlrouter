@@ -3,7 +3,6 @@ package dlrouter
 import (
 	"regexp"
 	"strings"
-	"log"
 
 	"code.byted.org/whale/tools/trie"
 	"code.byted.org/whale/tools/util"
@@ -16,7 +15,7 @@ type RegexTarget struct {
 
 type DomainMappingManager struct {
 	Domain               string
-	LocationExactSearch  map[string]interface{}
+	LocationExactSearch  map[string][]interface{}
 	MinPrefixLength      int
 	LocationPrefixSearch *trie.CTrie
 	LocationRegexSearch  []*RegexTarget
@@ -31,7 +30,7 @@ type LocationsMappingManager struct {
 func newDomainMappingManager(domain string) *DomainMappingManager {
 	return &DomainMappingManager{
 		Domain:               domain,
-		LocationExactSearch:  make(map[string]interface{}),
+		LocationExactSearch:  make(map[string][]interface{}),
 		LocationPrefixSearch: trie.NewCompressedTrie(),
 		MinPrefixLength:      int(^uint(0) >> 1),
 		LocationRegexSearch:  make([]*RegexTarget, 0, 3),
@@ -52,7 +51,13 @@ func (dm *DomainMappingManager) appendConf(dconf *domainConf) {
 
 		if strings.Index(location, "= ") == 0 {
 			remain := strings.TrimSpace(location[2:])
-			dm.LocationExactSearch[remain] = dconf.Target
+			tlist, exist := dm.LocationExactSearch[remain]
+			if exist {
+				tlist = append(tlist, dconf.Target)
+			} else {
+				tlist = []interface{}{dconf.Target}
+			}
+			dm.LocationExactSearch[remain] = tlist
 		} else if strings.Index(location, "~ ") == 0 {
 			remain := strings.TrimSpace(location[2:])
 			regexExp, err := regexp.Compile(remain)
@@ -71,7 +76,9 @@ func (dm *DomainMappingManager) appendConf(dconf *domainConf) {
 				dm.MinPrefixLength = locLen
 			}
 		}
+
 	}
+
 }
 
 func NewLocationsMappingManager(locationConfs []*LocationConf) *LocationsMappingManager {
@@ -82,7 +89,7 @@ func NewLocationsMappingManager(locationConfs []*LocationConf) *LocationsMapping
 		}
 		confs, err := getDomainConfs(lconf)
 		if err != nil {
-			log.Fatalf("get scene domain confs error: %v.\n", err)
+			util.Logger.Error("get scene domain confs error: %v.", err)
 			continue
 		}
 
@@ -136,7 +143,12 @@ func (m *LocationsMappingManager) getDomainManagerIterator(domain string) func()
 					reversedDomain := string(util.GetReversedBytes(domainBytes))
 					candidatesRaw, _ := m.DomainPostfixSearch.GetCandidateLeafs(reversedDomain)
 					for _, raw := range candidatesRaw {
-						stageCandidates = append(stageCandidates, raw.(*DomainMappingManager))
+						dmm, ok := raw.(*DomainMappingManager)
+						if ok {
+							stageCandidates = append(stageCandidates, dmm)
+						} else {
+							util.Logger.Error("Domain manager type cast error")
+						}
 					}
 				}
 				if len(stageCandidates) <= stageIdx {
@@ -149,7 +161,12 @@ func (m *LocationsMappingManager) getDomainManagerIterator(domain string) func()
 				if stageIdx == 0 {
 					candidatesRaw, _ := m.DomainPrefixSearch.GetCandidateLeafs(domain)
 					for _, raw := range candidatesRaw {
-						stageCandidates = append(stageCandidates, raw.(*DomainMappingManager))
+						dmm, ok := raw.(*DomainMappingManager)
+						if ok {
+							stageCandidates = append(stageCandidates, dmm)
+						} else {
+							util.Logger.Error("domainManager type cast error.")
+						}
 					}
 				}
 				if len(stageCandidates) <= stageIdx {
@@ -159,6 +176,7 @@ func (m *LocationsMappingManager) getDomainManagerIterator(domain string) func()
 				stageIdx++
 				return next, true
 			default:
+				util.Logger.Error("Error stage: %v", stage)
 				return nil, false
 			}
 		}
@@ -183,12 +201,13 @@ func (m *LocationsMappingManager) getDomainManagerIterator(domain string) func()
 func (dm *DomainMappingManager) getTargetsForPath(path string, getAll bool) ([]interface{}, bool) {
 	targets := make([]interface{}, 0, 3)
 	//首先寻求精确匹配
-	t, present := dm.LocationExactSearch[path]
-	if present {
-		targets = append(targets, t)
+	tlist, present := dm.LocationExactSearch[path]
+	if present && len(tlist) > 0 {
 		if !getAll {
+			targets = append(targets, tlist[0])
 			return targets, true
 		}
+		targets = append(targets, tlist...)
 	}
 
 	//前缀匹配

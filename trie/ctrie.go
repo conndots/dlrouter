@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"github.com/golang-collections/collections/queue"
+	"github.com/golang-collections/collections/stack"
 )
 
 type NodeType uint8
@@ -20,10 +21,14 @@ const (
 var (
 	valID = uint(0)
 )
+type pathVar struct {
+	valID uint
+	variable string
+}
 type target struct {
 	valID uint
 	value interface{}
-	pathVars []string
+	pathVars []*pathVar // the path vars the new path added
 }
 
 type TargetCandidate struct {
@@ -38,7 +43,6 @@ type CTrie struct {
 	LeafValues []*target
 	path       string
 	nodeType   NodeType
-	pathVars   []string
 }
 
 func NewCompressedTrie() *CTrie {
@@ -47,7 +51,6 @@ func NewCompressedTrie() *CTrie {
 		Size:        0,
 		LeafValues:  make([]*target, 0, 1),
 		nodeType:    NodeTypeRoot,
-		pathVars:    make([]string, 0, 0),
 	}
 }
 
@@ -58,12 +61,18 @@ func min(a, b int) int {
 	return b
 }
 
+func getPathVarWithID(pvar string, id uint) *pathVar {
+	return &pathVar {
+		variable: pvar,
+		valID: id,
+	}
+}
 func (ct *CTrie) Add(str string, value interface{}) error {
 	valID++
 	tar := target{
 		valID: valID,
 		value: value,
-		pathVars: make([]string, 0, 0),
+		pathVars: make([]*pathVar, 0, 0),
 	}
 
 	ct.Size++
@@ -81,7 +90,7 @@ func (ct *CTrie) Add(str string, value interface{}) error {
 					childrenIdx: ct.childrenIdx,
 					path:        ct.path[diffSt:],
 					Size:        ct.Size,
-					LeafValues:  append([]*target, ct.LeafValues...),
+					LeafValues:  ct.LeafValues,
 					nodeType:    ct.nodeType,
 				}
 				if ct.nodeType == NodeTypeRoot {
@@ -92,7 +101,7 @@ func (ct *CTrie) Add(str string, value interface{}) error {
 					}
 				}
 
-				ct.childrenIdx = make(map[byte]*CTrie)
+				ct.childrenIdx = make(map[byte]*CTrie, 2)
 				ct.childrenIdx[ct.path[diffSt]] = child
 				ct.path = ct.path[:diffSt]
 				if ct.nodeType == NodeTypeLeaf {
@@ -105,7 +114,6 @@ func (ct *CTrie) Add(str string, value interface{}) error {
 				if str[diffSt] != varSymbol { //normal string
 					str = str[diffSt:]
 					c := str[0]
-
 					sub, existed := ct.childrenIdx[c]
 					if existed {
 						ct = sub
@@ -120,23 +128,21 @@ func (ct *CTrie) Add(str string, value interface{}) error {
 						Size:       1,
 					}
 					if ct.childrenIdx == nil {
-						ct.childrenIdx = make(map[byte]*CTrie)
+						ct.childrenIdx = make(map[byte]*CTrie, 2)
 					}
 					ct.childrenIdx[c] = child
 					return nil
 				} else { //next part is a path Variable
 					str = str[diffSt:]
 					pos := strings.IndexByte(str, '/')
-					pathVar := ""
-					leafValues := make([]*target, 0, 1)
+					var pvar *pathVar
 					if pos == -1 { //the last element
 						str = ""
-						pathVar = fmt.Sprintf("%d_%s", tar.valID, str[1:])
-						tar.pathVars = append(tar.pathVars, pathVar)
-						leafValues = append(leafValues, &tar)
+						pvar = getPathVarWithID(str[1:], tar.valID)
+						tar.pathVars = append(tar.pathVars, pvar)
 					} else {
-						pathVar = fmt.Sprintf("%d_%s", tar.valID, str[1:pos])
-						tar.pathVars = append(tar.pathVars, pathVar)
+						pvar = getPathVarWithID(str[1:pos], tar.valID)
+						tar.pathVars = append(tar.pathVars, pvar)
 						str = str[pos:]
 					}
 
@@ -146,7 +152,7 @@ func (ct *CTrie) Add(str string, value interface{}) error {
 							return fmt.Errorf("wrong node type %d, expected %d", sub.nodeType, NodeTypeVar)
 						}
 						ct = sub
-						ct.pathVars = append(ct.pathVars, pathVar)
+						ct.LeafValues = append(ct.LeafValues, &tar)
 						if len(str) > 0 {
 							continue loopStart
 						} else {
@@ -155,14 +161,13 @@ func (ct *CTrie) Add(str string, value interface{}) error {
 					}
 
 					child := &CTrie{
-						LeafValues: leafValues,
+						LeafValues: []*target{&tar},
 						path: "",
 						nodeType: NodeTypeVar,
-						Size: len(leafValues),
-						pathVars: []string{pathVar},
+						Size: 1,
 					}
 					if ct.childrenIdx == nil {
-						ct.childrenIdx = make(map[byte]*CTrie)
+						ct.childrenIdx = make(map[byte]*CTrie, 2)
 					}
 					ct.childrenIdx[varSymbol] = child
 
@@ -187,17 +192,59 @@ func (ct *CTrie) Add(str string, value interface{}) error {
 	return nil
 }
 
+
+
+// processVarNodes returns the target string after the process
+func (t *target) processVarNodes(target string, pathVarsMap map[uint]map[string]string) string {
+	var varValue string
+	end := strings.IndexByte(target, '/')
+	remain := ""
+	if end == -1 || end == len(target) - 1 {
+		varValue = target
+	} else {
+		varValue = target[:end]
+		remain = target[end + 1:]
+	}
+	for _, pvar := range t.pathVars {
+		pmap, exist := pathVarsMap[pvar.valID]
+		if !exist {
+			pmap = make(map[string]string, 2)
+			pathVarsMap[pvar.valID] = pmap
+		}
+		pmap[pvar.variable] = varValue
+	}
+	return remain
+}
+func (ct *CTrie) getTargetCandidates(target string, pathVarsMap map[uint]map[string]string, candidates []*TargetCandidate) []*TargetCandidate {
+	for _, lval := range ct.LeafValues {
+		if ct.nodeType == NodeTypeVar {
+			target = lval.processVarNodes(target, pathVarsMap)
+
+			pathVars := pathVarsMap[lval.valID]
+			candidates = append(candidates, &TargetCandidate{
+				Value: lval.value,
+				Variables: pathVars,
+			})
+		} else {
+			pathVars := pathVarsMap[lval.valID]
+			candidates = append(candidates, &TargetCandidate{
+				Value: lval.value,
+				Variables: pathVars,
+			})
+		}
+	}
+}
+
 type searchContext struct {
 	node *CTrie
 	partialTarget string
 }
 
 func (ct *CTrie) GetCandidateLeafs(target string) (candidates []*TargetCandidate) {
-	candidates = make([]*TargetCandidate, 0, 2)
 	if len(target) == 0 {
-		return
+		return make([]*TargetCandidate, 0, 0)
 	}
-
+	candidates = make([]*TargetCandidate, 0, 2)
 	defer func() {
 		//reverse it, because the longest match matters.
 		for st, end := 0, len(candidates)-1; st < end; st, end = st+1, end-1 {
@@ -205,23 +252,24 @@ func (ct *CTrie) GetCandidateLeafs(target string) (candidates []*TargetCandidate
 		}
 	}()
 
-	squeue := queue.New()
-	squeue.Enqueue(&searchContext{ct, target})
+	/**
+	路径上无NodeTypeVar类型节点时，无需回溯；否则，使用广度优先遍历，需要回溯.stack里的节点全部是NodeTypeVar类型节点
+	为何选择广度优先遍历？返回值默认按照最长匹配的顺序返回候选。广度优先遍历保证数组添加顺序是按照匹配长度递增的顺序
+	 */
+	varMode := 0
+	//记录遇到的所有路径上所有的pathVars
+	queue := queue.New()
+	pathVarsMap := make(map[uint]map[string]string, 2)  //map[valID]map[varName]varValue
+	tlen := len(target)
+	queue.Enqueue(&searchContext{
+		node: ct,
+		partialTarget: target,
+	})
 
-	vars := make(map[string]string)
-
-	for squeue.Len() > 0 {
-		curr := squeue.Dequeue().(*searchContext)
-		node := curr.node
-		t := curr.partialTarget
-
-		switch node.nodeType {
-		case NodeTypeVar:
-			end := strings.IndexByte(t, '/')
-			if end == -1 {
-
-			}
-		}
+	for queue.Len() > 0 {
+		ctx := queue.Dequeue().(searchContext)
+		curr := ctx.node
+		tar := ctx.partialTarget
 	}
 }
 func (ct *CTrie) Print() {
