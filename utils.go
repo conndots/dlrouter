@@ -1,4 +1,4 @@
-package util
+package dlrouter
 
 func GetReversedBytes(str []byte) []byte {
 	bytes := []byte(str)
@@ -8,10 +8,10 @@ func GetReversedBytes(str []byte) []byte {
 	return bytes
 }
 
-func RemoveDuplicates(slice []interface{}) []interface{} {
+func RemoveDuplicates(slice []*Target) []*Target {
 	for i := 0; i < len(slice); i++ {
 		for j := i + 1; j < len(slice); j++ {
-			if slice[i] == slice[j] {
+			if slice[i].Value == slice[j].Value {
 				slice = append(slice[:j], slice[j+1:]...)
 				j--
 			}

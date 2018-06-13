@@ -1,45 +1,51 @@
 package dlrouter
 
 import (
+	"errors"
 	"regexp"
 	"strings"
 
-	"code.byted.org/whale/tools/trie"
-	"code.byted.org/whale/tools/util"
+	"github.com/conndots/dlrouter/pathtree"
 )
 
+var (
+	NotSameDomainErr = errors.New("domains are not identical")
+)
 type RegexTarget struct {
 	RegexExp *regexp.Regexp
 	Target   interface{}
 }
-
-type DomainMappingManager struct {
+type Target struct {
+	Value interface{}
+	Variables map[string]string
+}
+type DomainRouter struct {
 	Domain               string
 	LocationExactSearch  map[string][]interface{}
 	MinPrefixLength      int
-	LocationPrefixSearch *trie.CTrie
+	LocationPrefixSearch *pathtree.PathTree
 	LocationRegexSearch  []*RegexTarget
 }
 
-type LocationsMappingManager struct {
-	DomainExactSearch   map[string]*DomainMappingManager
-	DomainPostfixSearch *trie.CTrie
-	DomainPrefixSearch  *trie.CTrie
+type DomainLocationRouter struct {
+	DomainExactSearch   map[string]*DomainRouter
+	DomainPostfixSearch *pathtree.PathTree
+	DomainPrefixSearch  *pathtree.PathTree
 }
 
-func newDomainMappingManager(domain string) *DomainMappingManager {
-	return &DomainMappingManager{
+func newDomainRounter(domain string) *DomainRouter {
+	return &DomainRouter{
 		Domain:               domain,
 		LocationExactSearch:  make(map[string][]interface{}),
-		LocationPrefixSearch: trie.NewCompressedTrie(),
+		LocationPrefixSearch: pathtree.NewPathTree(),
 		MinPrefixLength:      int(^uint(0) >> 1),
 		LocationRegexSearch:  make([]*RegexTarget, 0, 3),
 	}
 }
 
-func (dm *DomainMappingManager) appendConf(dconf *domainConf) {
+func (dm *DomainRouter) appendConf(dconf *domainConf) error {
 	if dconf.Domain != dm.Domain {
-		return
+		return NotSameDomainErr
 	}
 
 	for _, location := range dconf.Locations {
@@ -62,7 +68,7 @@ func (dm *DomainMappingManager) appendConf(dconf *domainConf) {
 			remain := strings.TrimSpace(location[2:])
 			regexExp, err := regexp.Compile(remain)
 			if err != nil {
-				util.Logger.Error("[scene_map] Regex compile error. error=%v. origin=%s. target=%v.", err, remain, dconf.Target)
+				return err
 			} else {
 				dm.LocationRegexSearch = append(dm.LocationRegexSearch, &RegexTarget{
 					RegexExp: regexExp,
@@ -78,57 +84,63 @@ func (dm *DomainMappingManager) appendConf(dconf *domainConf) {
 		}
 
 	}
+	return nil
 
 }
 
-func NewLocationsMappingManager(locationConfs []*LocationConf) *LocationsMappingManager {
-	domainExactSearch := make(map[string]*DomainMappingManager)
+func NewRouter(locationConfs []*LocationConf) (*DomainLocationRouter, error) {
+	domainExactSearch := make(map[string]*DomainRouter)
 	for _, lconf := range locationConfs {
 		if len(lconf.MappingConf) == 0 || lconf.Target == nil {
 			continue
 		}
 		confs, err := getDomainConfs(lconf)
 		if err != nil {
-			util.Logger.Error("get scene domain confs error: %v.", err)
-			continue
+			return nil, err
 		}
 
 		for _, conf := range confs {
 			if man, existed := domainExactSearch[conf.Domain]; existed {
-				man.appendConf(conf)
+				err := man.appendConf(conf)
+				if err != nil {
+					return nil, err
+				}
 			} else {
-				newMan := newDomainMappingManager(conf.Domain)
-				newMan.appendConf(conf)
+				newMan := newDomainRounter(conf.Domain)
+				err := newMan.appendConf(conf)
+				if err != nil {
+					return nil, err
+				}
 				domainExactSearch[conf.Domain] = newMan
 			}
 		}
 	}
 
-	ins := &LocationsMappingManager{
+	ins := &DomainLocationRouter{
 		DomainExactSearch:   domainExactSearch,
-		DomainPostfixSearch: trie.NewCompressedTrie(),
-		DomainPrefixSearch:  trie.NewCompressedTrie(),
+		DomainPostfixSearch: pathtree.NewPathTree(),
+		DomainPrefixSearch:  pathtree.NewPathTree(),
 	}
 
 	for domain, man := range domainExactSearch {
 		domainBytes := []byte(domain)
 		ins.DomainPrefixSearch.Add(domain, man)
 
-		domainBytesRev := util.GetReversedBytes(domainBytes)
+		domainBytesRev := GetReversedBytes(domainBytes)
 		ins.DomainPostfixSearch.Add(string(domainBytesRev), man)
 	}
 
-	return ins
+	return ins, nil
 }
 
 //Iterator Pattern using Closure
-func (m *LocationsMappingManager) getDomainManagerIterator(domain string) func() (*DomainMappingManager, bool) {
+func (m *DomainLocationRouter) getDomainManagerIterator(domain string) func() (*DomainRouter, bool) {
 	currentStage := 0
 	stageIdx := 0
-	stageCandidates := make([]*DomainMappingManager, 2)
+	stageCandidates := make([]*DomainRouter, 2)
 
-	return func() (*DomainMappingManager, bool) {
-		GetNextInStage := func(stage int) (*DomainMappingManager, bool) {
+	return func() (*DomainRouter, bool) {
+		GetNextInStage := func(stage int) (*DomainRouter, bool) {
 			switch stage {
 			case 0: //exact match
 				if stageIdx > 0 {
@@ -140,15 +152,11 @@ func (m *LocationsMappingManager) getDomainManagerIterator(domain string) func()
 			case 1: //后缀反向匹配
 				if stageIdx == 0 {
 					domainBytes := []byte(domain)
-					reversedDomain := string(util.GetReversedBytes(domainBytes))
-					candidatesRaw, _ := m.DomainPostfixSearch.GetCandidateLeafs(reversedDomain)
-					for _, raw := range candidatesRaw {
-						dmm, ok := raw.(*DomainMappingManager)
-						if ok {
-							stageCandidates = append(stageCandidates, dmm)
-						} else {
-							util.Logger.Error("Domain manager type cast error")
-						}
+					reversedDomain := string(GetReversedBytes(domainBytes))
+					candidateTargets := m.DomainPostfixSearch.GetCandidateLeafs(reversedDomain)
+					for _, t := range candidateTargets {
+						dmm := t.Value.(*DomainRouter)
+						stageCandidates = append(stageCandidates, dmm)
 					}
 				}
 				if len(stageCandidates) <= stageIdx {
@@ -159,14 +167,10 @@ func (m *LocationsMappingManager) getDomainManagerIterator(domain string) func()
 				return next, true
 			case 2: //前缀匹配
 				if stageIdx == 0 {
-					candidatesRaw, _ := m.DomainPrefixSearch.GetCandidateLeafs(domain)
-					for _, raw := range candidatesRaw {
-						dmm, ok := raw.(*DomainMappingManager)
-						if ok {
-							stageCandidates = append(stageCandidates, dmm)
-						} else {
-							util.Logger.Error("domainManager type cast error.")
-						}
+					candidateTargets := m.DomainPrefixSearch.GetCandidateLeafs(domain)
+					for _, t := range candidateTargets {
+						dmm := t.Value.(*DomainRouter)
+						stageCandidates = append(stageCandidates, dmm)
 					}
 				}
 				if len(stageCandidates) <= stageIdx {
@@ -176,7 +180,6 @@ func (m *LocationsMappingManager) getDomainManagerIterator(domain string) func()
 				stageIdx++
 				return next, true
 			default:
-				util.Logger.Error("Error stage: %v", stage)
 				return nil, false
 			}
 		}
@@ -185,12 +188,12 @@ func (m *LocationsMappingManager) getDomainManagerIterator(domain string) func()
 			return nil, false
 		}
 
-		var man *DomainMappingManager
+		var man *DomainRouter
 		ok := false
 		for man, ok = GetNextInStage(currentStage); currentStage < 2 && !ok; man, ok = GetNextInStage(currentStage) {
 			//upgrade stage
 			currentStage++
-			stageCandidates = make([]*DomainMappingManager, 0, 0)
+			stageCandidates = make([]*DomainRouter, 0, 0)
 			stageIdx = 0
 		}
 
@@ -198,24 +201,35 @@ func (m *LocationsMappingManager) getDomainManagerIterator(domain string) func()
 	}
 }
 
-func (dm *DomainMappingManager) getTargetsForPath(path string, getAll bool) ([]interface{}, bool) {
-	targets := make([]interface{}, 0, 3)
+func (dm *DomainRouter) getTargetsForPath(path string, getAll bool) ([]*Target, bool) {
+	targets := make([]*Target, 0, 1)
 	//首先寻求精确匹配
 	tlist, present := dm.LocationExactSearch[path]
 	if present && len(tlist) > 0 {
 		if !getAll {
-			targets = append(targets, tlist[0])
+			targets = append(targets, &Target{
+				Value: tlist[0],
+			})
 			return targets, true
 		}
-		targets = append(targets, tlist...)
+		for _, t := range tlist {
+			targets = append(targets, &Target{
+				Value: t,
+			})
+		}
 	}
 
 	//前缀匹配
 	pathBytes := []byte(path)
 	if dm.LocationPrefixSearch.Size > 0 && dm.MinPrefixLength <= len(path) {
-		candidates, _ := dm.LocationPrefixSearch.GetCandidateLeafs(path)
+		candidates := dm.LocationPrefixSearch.GetCandidateLeafs(path)
 		if len(candidates) > 0 {
-			targets = append(targets, candidates...)
+			for _, candidate := range candidates {
+				targets = append(targets, &Target{
+					Value: candidate.Value,
+					Variables: candidate.Variables,
+				})
+			}
 			if !getAll {
 				return targets, true
 			}
@@ -225,7 +239,7 @@ func (dm *DomainMappingManager) getTargetsForPath(path string, getAll bool) ([]i
 	for _, regexTar := range dm.LocationRegexSearch {
 		match := regexTar.RegexExp.Find(pathBytes)
 		if match != nil {
-			targets = append(targets, regexTar.Target)
+			targets = append(targets, &Target{Value: regexTar.Target})
 			if !getAll {
 				return targets, true
 			}
@@ -234,7 +248,7 @@ func (dm *DomainMappingManager) getTargetsForPath(path string, getAll bool) ([]i
 	return targets, len(targets) > 0
 }
 
-func (m *LocationsMappingManager) GetTarget(domain string, path string) (interface{}, bool) {
+func (m *DomainLocationRouter) GetTarget(domain string, path string) (*Target, bool) {
 	dmanIterator := m.getDomainManagerIterator(domain)
 
 	for dm, present := dmanIterator(); present; dm, present = dmanIterator() {
@@ -246,9 +260,9 @@ func (m *LocationsMappingManager) GetTarget(domain string, path string) (interfa
 	return nil, false
 }
 
-func (m *LocationsMappingManager) GetAllTargets(domain string, path string) ([]interface{}, bool) {
+func (m *DomainLocationRouter) GetAllTargets(domain string, path string) ([]*Target, bool) {
 	dmanIterator := m.getDomainManagerIterator(domain)
-	targets := make([]interface{}, 0, 3)
+	targets := make([]*Target, 0, 2)
 
 	for dm, present := dmanIterator(); present; dm, present = dmanIterator() {
 		tars, matched := dm.getTargetsForPath(path, true)
@@ -258,7 +272,7 @@ func (m *LocationsMappingManager) GetAllTargets(domain string, path string) ([]i
 	}
 
 	//remove duplicates
-	targets = util.RemoveDuplicates(targets)
+	targets = RemoveDuplicates(targets)
 
 	return targets, len(targets) > 0
 }

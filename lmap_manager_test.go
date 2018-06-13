@@ -23,6 +23,8 @@ var test0Conf = `- domains:
     - /page/video/
     - /page/user/settings
     - ~ /page/user/profile/[0-9]+
+    - /info/:version/group/:group_id/
+    - /info/:version/item/:item_id/
     - /page/common
 - domains:
     - api.hotsoon.com
@@ -89,13 +91,14 @@ func getConfFromYaml(yamlConf string) []*MappingBlock {
 	return blocks
 }
 
-func getMappingManager() *LocationsMappingManager {
-	return NewLocationsMappingManager(testData)
+func getMappingManager() *DomainLocationRouter {
+	m, _ := NewRouter(testData)
+	return m
 }
 
-func sliceHas(slice []interface{}, target interface{}) bool {
+func sliceHas(slice []*Target, target interface{}) bool {
 	for _, s := range slice {
-		if target == s {
+		if target == s.Value {
 			return true
 		}
 	}
@@ -127,27 +130,27 @@ func TestGetTarget(t *testing.T) {
 	sm := getMappingManager()
 
 	target, exist := sm.GetTarget("api.neihan.com", "/api/neihan/video/detail/123435345")
-	if !exist || target != 2 {
+	if !exist || target.Value != 2 {
 		t.Errorf("get target error. expected: %v %v; got: %v %v", true, 2, exist, target)
 	}
 
 	target, exist = sm.GetTarget("api-hotsoon.byted.org", "/api/hotsoon/video/comment/avbasdfaskdfsdf/12345")
-	if !exist || target != 1 {
+	if !exist || target.Value != 1 {
 		t.Errorf("get target error. expected: %v %v; got: %v %v", true, 1, exist, target)
 	}
 
 	target, exist = sm.GetTarget("api.neihan.com", "/api/neihan/post/comment/123445/sdfjklHUIIHJFEewfsdfSDSDF")
-	if !exist || target != 2 {
+	if !exist || target.Value != 2 {
 		t.Errorf("get target error. expected: %v %v; got: %v %v", true, 2, exist, target)
 	}
 
 	target, exist = sm.GetTarget("products.byted.org", "/page/video/sdfsdfweruFHUIER/1")
-	if !exist || target != 1 {
+	if !exist || target.Value != 1 {
 		t.Errorf("get target error. expected: %v %v; got: %v %v", true, 1, exist, target)
 	}
 
 	target, exist = sm.GetTarget("products.byted.org", "/page/post/sdfsdfweruFHUIER/1")
-	if !exist || target != 2 {
+	if !exist || target.Value != 2 {
 		t.Errorf("get target error. expected: %v %v; got: %v %v", true, 2, exist, target)
 	}
 
@@ -159,6 +162,17 @@ func TestGetTarget(t *testing.T) {
 
 	if !exist {
 		t.Errorf("get target error.")
+	}
+
+	target, exist = sm.GetTarget("products.byted.org", "/info/4/group/12345/comments/")
+
+	if !exist  || target.Value != 1 || target.Variables["version"] != "4" || target.Variables["group_id"] != "12345" {
+		t.Errorf("get target error.")
+	}
+	target, exist = sm.GetTarget("products.byted.org", "/info/3/item/123454321/comments/")
+
+	if !exist || target.Value != 1 || target.Variables["version"] != "3" || target.Variables["item_id"] != "123454321" {
+		t.Errorf("get target error: %v", *target)
 	}
 }
 
