@@ -30,15 +30,18 @@ func getPreparedCTrie() *PathTree {
 
 func getPathTreeWithVar(t *PathTree) *PathTree {
 	t.Add("/aweme/v:version/user/:user_id", "aweme_user")
+	t.Add("/aweme/v:version/poi/feed/", "aweme_poi_feed")
 	t.Add("/toutiao/pc/a:item_id", "tt_item")
 	t.Add("/toutiao/pc/a:group_id", "tt_group")
 	t.Add("/item/:item_id", "tt_item")
 	t.Add("/group/:group_id", "tt_group")
+	t.Add("/service/:version/information/:group_id/", "app_info")
 	return t
 }
 
 func TestTreeWithVar(t *testing.T) {
 	tree := getPathTreeWithVar(getPreparedCTrie())
+	// tree := getPathTreeWithVar(NewPathTree())
 	tree.Print()
 
 	cands := tree.GetCandidateLeafs("/aweme/v1/user/12345")
@@ -47,13 +50,50 @@ func TestTreeWithVar(t *testing.T) {
 			t.Errorf("candidate %d: %v", i, *c)
 		}
 	}
-	cands = tree.GetCandidateLeafs("/toutiao/pc/a3121212")
-	if len(cands) != 1 || cands[0].Value != "tt_item" || cands[0].Variables["item_id"] != "3121212" {
+	// cands = tree.GetCandidateLeafs("/toutiao/pc/a3121212")
+	// if len(cands) != 2 {
+	// 	for i, c := range cands {
+	// 		t.Errorf("candidate %d: %v", i, *c)
+	// 	}
+	// }
+	cands = tree.GetCandidateLeafs("/aweme/v2/feed/")
+	if len(cands) != 0 {
 		for i, c := range cands {
 			t.Errorf("candidate %d: %v", i, *c)
 		}
 	}
 
+	cands = tree.GetCandidateLeafs("www.google.uk.wtf.hehe")
+	if len(cands) != 4 {
+		t.Errorf("www.google.uk.wtf.hehe get err")
+	}
+
+	candidates := tree.GetCandidateLeafs("www.google.uk.wtf.fuck")
+	if len(candidates) != 4 {
+		t.Errorf("www.google.uk.wtf.fuck expected: candidates length: 4; got: %v", candidates)
+	}
+	if candidates[0].Value != 6 || candidates[1].Value != 5 || candidates[2].Value != 1 || candidates[3].Value != 2 {
+		t.Errorf("www.google.uk.wtf.fuck expected: %v got: %v", []int{6, 5, 1, 2}, candidates)
+	}
+
+	candidates = tree.GetCandidateLeafs("www.facebook.cn")
+	if len(candidates) != 1 || candidates[0].Value != 2 {
+		t.Errorf("www.google.cn error")
+		for i, c := range candidates {
+			t.Errorf("candidate %d: %v", i, *c)
+		}
+
+	}
+	candidates = tree.GetCandidateLeafs("wtf.google.cn")
+	if len(candidates) != 0 {
+		t.Errorf("wtf.google.cn error")
+	}
+
+	cands = tree.GetCandidateLeafs("/service/2/information/12345/detail")
+	if len(cands) != 1 || cands[0].Value != "app_info" || cands[0].Variables["version"] != "2" || cands[0].Variables["group_id"] != "12345" {
+
+		t.Errorf("/service/2/information/12345/detail get err")
+	}
 }
 
 func TestCTrieAddSame(t *testing.T) {
@@ -100,6 +140,19 @@ func TestCTrieGetCandidates(t *testing.T) {
 	}
 	if candidates[0].Value != 6 || candidates[1].Value != 5 || candidates[2].Value != 1 || candidates[3].Value != 2 {
 		t.Errorf("www.google.uk.wtf.fuck expected: %v got: %v", []int{6, 5, 1, 2}, candidates)
+	}
+
+	candidates = trie.GetCandidateLeafs("www.facebook.cn")
+	if len(candidates) != 1 || candidates[0].Value != 2 {
+		t.Errorf("www.google.cn error")
+		for i, c := range candidates {
+			t.Errorf("candidate %d: %v", i, *c)
+		}
+
+	}
+	candidates = trie.GetCandidateLeafs("wtf.google.cn")
+	if len(candidates) != 0 {
+		t.Errorf("wtf.google.cn error")
 	}
 }
 

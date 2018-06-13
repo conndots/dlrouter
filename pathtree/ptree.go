@@ -140,6 +140,13 @@ loopStart:
 					}
 					ct = sub
 					ct.pathVars = append(ct.pathVars, pvar)
+					if len(str) == 0 { //str已经添加完成
+						ct.LeafValues = append(ct.LeafValues, &target{
+							valID: valID,
+							value: value,
+						})
+					}
+
 					if len(str) > 0 {
 						continue loopStart
 					} else {
@@ -307,15 +314,16 @@ func (ct *PathTree) GetCandidateLeafs(target string) (candidates []*TargetCandid
 					if !hasChild && !hasVarChild {
 						continue
 					}
-					if hasChild {
-						queue.Enqueue(&searchContext{
-							node:          next,
-							partialTarget: nextTar,
-						})
-					}
+
 					if hasVarChild {
 						queue.Enqueue(&searchContext{
 							node:          nextVar,
+							partialTarget: nextTar,
+						})
+					}
+					if hasChild {
+						queue.Enqueue(&searchContext{
+							node:          next,
 							partialTarget: nextTar,
 						})
 					}
