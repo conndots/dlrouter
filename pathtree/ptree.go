@@ -216,7 +216,7 @@ loopStart:
 func (ct *PathTree) getTargetCandidates(target string, pathVarsMap map[uint]map[string]string, candidates []*TargetCandidate) []*TargetCandidate {
 	var varValue string
 	end := strings.IndexByte(target, pathSplitter)
-	if end == -1 || end == len(target)-1 {
+	if end == -1 {
 		varValue = target
 	} else {
 		varValue = target[:end]
