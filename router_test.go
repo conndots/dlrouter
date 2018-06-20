@@ -26,6 +26,7 @@ var test0Conf = `- domains:
     - /info/:version/group/:group_id/
     - /info/:version/item/:item_id/
     - /page/common
+
 - domains:
     - api.hotsoon.com
     - api.hotsoon.org
@@ -71,6 +72,16 @@ var test1Conf = `- domains:
   locations:
     - = /wenda/web/feed/brow/
 `
+var testConf2 = `- domains:
+    - aweme.snssdk.com
+  locations:
+    - /aweme/v1/:search_type/search/
+
+- domains:
+    - api.amemv.com
+  locations:
+    - /aweme/v1/:search_type/search/
+`
 var testData = []*LocationConf{
 	&LocationConf{
 		Target:      1,
@@ -79,6 +90,10 @@ var testData = []*LocationConf{
 	&LocationConf{
 		Target:      2,
 		MappingConf: getConfFromYaml(test1Conf),
+	},
+	&LocationConf{
+		Target: 3,
+		MappingConf: getConfFromYaml(testConf2),
 	},
 }
 
@@ -173,6 +188,11 @@ func TestGetTarget(t *testing.T) {
 
 	if !exist || target.Value != 1 || target.Variables["version"] != "3" || target.Variables["item_id"] != "123454321" {
 		t.Errorf("get target error: %v", *target)
+	}
+
+	target, exist = sm.GetTarget("aweme.snssdk.com", "/aweme/v1/discover/search/")
+	if !exist || target.Value != 3 || target.Variables["search_type"] != "discover" {
+		t.Errorf("get target error: %v", target)
 	}
 }
 

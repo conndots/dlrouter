@@ -36,6 +36,7 @@ func getPathTreeWithVar(t *PathTree) *PathTree {
 	t.Add("/item/:item_id", "tt_item")
 	t.Add("/group/:group_id", "tt_group")
 	t.Add("/service/:version/information/:group_id/", "app_info")
+	t.Add("/aweme/v1/:search_type/search/", "aweme_search")
 	return t
 }
 
@@ -93,6 +94,10 @@ func TestTreeWithVar(t *testing.T) {
 	if len(cands) != 1 || cands[0].Value != "app_info" || cands[0].Variables["version"] != "2" || cands[0].Variables["group_id"] != "12345" {
 
 		t.Errorf("/service/2/information/12345/detail get err")
+	}
+	cands = tree.GetCandidateLeafs("/aweme/v1/discover/search/")
+	if len(cands) != 1 || cands[0].Value != "aweme_search" || cands[0].Variables["search_type"] != "discover" {
+		t.Errorf("/aweme/v1/discover/search/ get err")
 	}
 }
 

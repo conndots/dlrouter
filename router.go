@@ -22,7 +22,6 @@ type Target struct {
 type DomainRouter struct {
 	Domain               string
 	LocationExactSearch  map[string][]interface{}
-	MinPrefixLength      int
 	LocationPrefixSearch *pathtree.PathTree
 	LocationRegexSearch  []*RegexTarget
 }
@@ -38,7 +37,6 @@ func newDomainRounter(domain string) *DomainRouter {
 		Domain:               domain,
 		LocationExactSearch:  make(map[string][]interface{}),
 		LocationPrefixSearch: pathtree.NewPathTree(),
-		MinPrefixLength:      int(^uint(0) >> 1),
 		LocationRegexSearch:  make([]*RegexTarget, 0, 3),
 	}
 }
@@ -77,10 +75,6 @@ func (dm *DomainRouter) appendConf(dconf *domainConf) error {
 			}
 		} else {
 			dm.LocationPrefixSearch.Add(location, dconf.Target)
-			locLen := len(location)
-			if locLen < dm.MinPrefixLength {
-				dm.MinPrefixLength = locLen
-			}
 		}
 
 	}
@@ -221,7 +215,7 @@ func (dm *DomainRouter) getTargetsForPath(path string, getAll bool) ([]*Target, 
 
 	//前缀匹配
 	pathBytes := []byte(path)
-	if dm.LocationPrefixSearch.Size > 0 && dm.MinPrefixLength <= len(path) {
+	if dm.LocationPrefixSearch.Size > 0 {
 		candidates := dm.LocationPrefixSearch.GetCandidateLeafs(path)
 		if len(candidates) > 0 {
 			for _, candidate := range candidates {
