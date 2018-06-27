@@ -84,7 +84,6 @@ loopStart:
 		for diffSt < minLen && str[diffSt] != varSymbol && str[diffSt] == ct.path[diffSt] {
 			diffSt++
 		}
-		fmt.Println(ct.path, str, diffSt)
 
 		// if diffSt == len(ct.path) && diffSt == len(str) {
 		// 	ct.LeafValues = append(ct.LeafValues, &target{
