@@ -24,6 +24,7 @@ func getPreparedCTrie() *PathTree {
 	trie.Print()
 	trie.Add("www.google.uk.wtf", 6)
 	fmt.Println("add www.google.uk.wtf", 6)
+	trie.Add("/aweme/v1/aweme/post", "aweme_post")
 	trie.Print()
 	return trie
 }
@@ -171,7 +172,7 @@ func TestCTrieAdd(t *testing.T) {
 func TestCTrieGetCandidates(t *testing.T) {
 	trie := getPreparedCTrie()
 	trie.Print()
-	if trie.Size != 6 {
+	if trie.Size != 7 {
 		t.Errorf("size not 6")
 	}
 	candidates := trie.GetCandidateLeafs("www.google.uk.wtf.fuck")
@@ -193,6 +194,10 @@ func TestCTrieGetCandidates(t *testing.T) {
 	candidates = trie.GetCandidateLeafs("wtf.google.cn")
 	if len(candidates) != 0 {
 		t.Errorf("wtf.google.cn error")
+	}
+	candidates = trie.GetCandidateLeafs("/aweme/v1/aweme/post/")
+	if len(candidates) != 1 || candidates[0].Value != "aweme_post" {
+		t.Errorf("/aweme/v1/aweme/post/ error")
 	}
 }
 
