@@ -30,24 +30,28 @@ func getPreparedCTrie() *PathTree {
 }
 
 func getPathTreeWithVar(t *PathTree) *PathTree {
-	t.Add("/aweme/v:version/user/:user_id", "aweme_user")
-	t.Add("/aweme/v:version/poi/feed/", "aweme_poi_feed")
-	t.Add("/toutiao/pc/a:item_id", "tt_item")
-	t.Add("/toutiao/pc/a:group_id", "tt_group")
+	t.Add("/aw/v:version/user/:user_id", "aw_user")
+	t.Add("/aw/v:version/poi/feed/", "aw_poi_feed")
+	t.Add("/tt/pc/a:item_id", "tt_item")
+	t.Add("/tt/pc/a:group_id", "tt_group")
 	t.Add("/item/:item_id", "tt_item")
 	t.Add("/group/:group_id", "tt_group")
 	t.Add("/service/:version/information/:group_id/", "app_info")
-	t.Add("/aweme/v1/:search_type/search/", "aweme_search")
+	t.Add("/aw/v1/:search_type/search/", "aw_search")
+	t.Add("/aw/v:version/feed/", "aw_feed")
+	t.Add("/hot/item/video/play/", "hot_play")
+	t.Add("/hot/item/:item_id/comments/", "hot_comments")
 	return t
 }
 
 func TestTreeWithVar(t *testing.T) {
 	tree := getPathTreeWithVar(getPreparedCTrie())
 	// tree := getPathTreeWithVar(NewPathTree())
+	fmt.Println("===============================")
 	tree.Print()
 
-	cands := tree.GetCandidateLeafs("/aweme/v1/user/12345")
-	if len(cands) != 1 || cands[0].Value != "aweme_user" || cands[0].Variables["version"] != "1" || cands[0].Variables["user_id"] != "12345" {
+	cands := tree.GetCandidateLeafs("/aw/v1/user/12345")
+	if len(cands) != 1 || cands[0].Value != "aw_user" || cands[0].Variables["version"] != "1" || cands[0].Variables["user_id"] != "12345" {
 		for i, c := range cands {
 			t.Errorf("candidate %d: %v", i, *c)
 		}
@@ -58,7 +62,7 @@ func TestTreeWithVar(t *testing.T) {
 	// 		t.Errorf("candidate %d: %v", i, *c)
 	// 	}
 	// }
-	cands = tree.GetCandidateLeafs("/aweme/v2/feed/")
+	cands = tree.GetCandidateLeafs("/aw/v2/hehe/feed/")
 	if len(cands) != 0 {
 		for i, c := range cands {
 			t.Errorf("candidate %d: %v", i, *c)
@@ -96,9 +100,40 @@ func TestTreeWithVar(t *testing.T) {
 
 		t.Errorf("/service/2/information/12345/detail get err")
 	}
-	cands = tree.GetCandidateLeafs("/aweme/v1/discover/search/")
-	if len(cands) != 1 || cands[0].Value != "aweme_search" || cands[0].Variables["search_type"] != "discover" {
-		t.Errorf("/aweme/v1/discover/search/ get err")
+	cands = tree.GetCandidateLeafs("/aw/v1/discover/search/")
+	if len(cands) != 1 || cands[0].Value != "aw_search" || cands[0].Variables["search_type"] != "discover" {
+		t.Errorf("/aw/v1/discover/search/ get err")
+	}
+	cands = tree.GetCandidateLeafs("/aweme/v1/aweme/post/")
+	if len(cands) > 0 {
+		t.Errorf("/aw/v1/post/ candidates: %v", cands)
+		for i, c := range cands {
+			t.Errorf("candidate %d: %v", i, *c)
+		}
+	}
+
+	cands = tree.GetCandidateLeafs("/hot/item/12345/comments/")
+	if len(cands) == 0 || cands[0].Value != "hot_comments" || cands[0].Variables["item_id"] != "12345" {
+		t.Errorf("/hotsoon/item/12345/comments/ candidates: %v", cands)
+		for i, c := range cands {
+			t.Errorf("candidate %d: %v", i, *c)
+		}
+	}
+
+	cands = tree.GetCandidateLeafs("/hot/item/video/play/")
+	if len(cands) == 0 || cands[0].Value != "hot_play" {
+		t.Errorf("/hot/item/video/play/ candidates: %v", cands)
+		for i, c := range cands {
+			t.Errorf("candidate %d: %v", i, *c)
+		}
+	}
+
+	cands = tree.GetCandidateLeafs("/hot/item/12345/act/")
+	if len(cands) > 0 {
+		t.Errorf("/hot/item/12345/act/ candidates: %v", cands)
+		for i, c := range cands {
+			t.Errorf("candidate %d: %v", i, *c)
+		}
 	}
 }
 

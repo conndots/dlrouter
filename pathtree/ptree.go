@@ -69,6 +69,14 @@ func getPathVarWithID(pvar string, id uint) *pathVar {
 		valID:    id,
 	}
 }
+
+func getPathEndingAtVar(path string) string {
+	pos := strings.IndexByte(path, varSymbol)
+	if pos >= 0 {
+		return path[:pos]
+	}
+	return path
+}
 func (ct *PathTree) Add(str string, value interface{}) error {
 	valID++
 	ct.Size++
@@ -85,16 +93,7 @@ loopStart:
 			diffSt++
 		}
 
-		// if diffSt == len(ct.path) && diffSt == len(str) {
-		// 	ct.LeafValues = append(ct.LeafValues, &target{
-		// 		value: value,
-		// 		valID: valID,
-		// 	})
-		// 	return nil
-		// } else
-		if diffSt < minLen && str[diffSt] == varSymbol {
-			ct.path = ct.path[0:diffSt]
-		} else if diffSt < len(ct.path) { //split the node
+		if diffSt < len(ct.path) { //split the node
 			child := &PathTree{
 				childrenIdx: ct.childrenIdx,
 				path:        ct.path[diffSt:],
@@ -184,7 +183,7 @@ loopStart:
 				//add to a new child
 				child := &PathTree{
 					nodeType: NodeTypeDefault,
-					path:     str,
+					path:     getPathEndingAtVar(str), //无需添加变量符之后的内容，变量符需要split
 					Size:     1,
 				}
 				if ct.childrenIdx == nil {
