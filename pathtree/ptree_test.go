@@ -37,12 +37,16 @@ func getPathTreeWithVar(t *PathTree) *PathTree {
 	t.Add("/group/:group_id", "tt_group")
 	t.Add("/service/:version/information/:group_id/", "app_info")
 	t.Add("/aweme/v1/:search_type/search/", "aweme_search")
+	t.Add("/aweme/v:version/feed/", "aweme_feed")
+	t.Add("/hotsoon/item/video/_playback/", "hotsoon_playback")
+	t.Add("/hotsoon/item/:item_id/comments/", "hotsoon_comments")
 	return t
 }
 
 func TestTreeWithVar(t *testing.T) {
 	tree := getPathTreeWithVar(getPreparedCTrie())
 	// tree := getPathTreeWithVar(NewPathTree())
+	fmt.Println("===============================")
 	tree.Print()
 
 	cands := tree.GetCandidateLeafs("/aweme/v1/user/12345")
@@ -57,7 +61,7 @@ func TestTreeWithVar(t *testing.T) {
 	// 		t.Errorf("candidate %d: %v", i, *c)
 	// 	}
 	// }
-	cands = tree.GetCandidateLeafs("/aweme/v2/feed/")
+	cands = tree.GetCandidateLeafs("/aweme/v2/hehe/feed/")
 	if len(cands) != 0 {
 		for i, c := range cands {
 			t.Errorf("candidate %d: %v", i, *c)
@@ -98,6 +102,37 @@ func TestTreeWithVar(t *testing.T) {
 	cands = tree.GetCandidateLeafs("/aweme/v1/discover/search/")
 	if len(cands) != 1 || cands[0].Value != "aweme_search" || cands[0].Variables["search_type"] != "discover" {
 		t.Errorf("/aweme/v1/discover/search/ get err")
+	}
+	cands = tree.GetCandidateLeafs("/aweme/v1/aweme/post/")
+	if len(cands) > 0 {
+		t.Errorf("/aweme/v1/aweme/post/ candidates: %v", cands)
+		for i, c := range cands {
+			t.Errorf("candidate %d: %v", i, *c)
+		}
+	}
+
+	cands = tree.GetCandidateLeafs("/hotsoon/item/12345/comments/")
+	if len(cands) == 0 || cands[0].Value != "hotsoon_comments" || cands[0].Variables["item_id"] != "12345" {
+		t.Errorf("/hotsoon/item/12345/comments/ candidates: %v", cands)
+		for i, c := range cands {
+			t.Errorf("candidate %d: %v", i, *c)
+		}
+	}
+
+	cands = tree.GetCandidateLeafs("/hotsoon/item/video/_playback/")
+	if len(cands) == 0 || cands[0].Value != "hotsoon_playback" {
+		t.Errorf("/hotsoon/item/video/_playback/ candidates: %v", cands)
+		for i, c := range cands {
+			t.Errorf("candidate %d: %v", i, *c)
+		}
+	}
+
+	cands = tree.GetCandidateLeafs("/hotsoon/item/12345/_action/")
+	if len(cands) > 0 {
+		t.Errorf("/hotsoon/item/12345/_action/ candidates: %v", cands)
+		for i, c := range cands {
+			t.Errorf("candidate %d: %v", i, *c)
+		}
 	}
 }
 
