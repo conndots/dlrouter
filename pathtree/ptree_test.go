@@ -38,7 +38,7 @@ func getPathTreeWithVar(t *PathTree) *PathTree {
 	t.Add("/service/:version/information/:group_id/", "app_info")
 	t.Add("/aw/v1/:search_type/search/", "aw_search")
 	t.Add("/aw/v:version/feed/", "aw_feed")
-	t.Add("/hot/item/video/_playback/", "hot_playback")
+	t.Add("/hot/item/video/play/", "hot_play")
 	t.Add("/hot/item/:item_id/comments/", "hot_comments")
 	return t
 }
@@ -119,17 +119,17 @@ func TestTreeWithVar(t *testing.T) {
 		}
 	}
 
-	cands = tree.GetCandidateLeafs("/hot/item/video/_playback/")
-	if len(cands) == 0 || cands[0].Value != "hot_playback" {
-		t.Errorf("/hot/item/video/_playback/ candidates: %v", cands)
+	cands = tree.GetCandidateLeafs("/hot/item/video/play/")
+	if len(cands) == 0 || cands[0].Value != "hot_play" {
+		t.Errorf("/hot/item/video/play/ candidates: %v", cands)
 		for i, c := range cands {
 			t.Errorf("candidate %d: %v", i, *c)
 		}
 	}
 
-	cands = tree.GetCandidateLeafs("/hot/item/12345/_action/")
+	cands = tree.GetCandidateLeafs("/hot/item/12345/act/")
 	if len(cands) > 0 {
-		t.Errorf("/hot/item/12345/_action/ candidates: %v", cands)
+		t.Errorf("/hot/item/12345/act/ candidates: %v", cands)
 		for i, c := range cands {
 			t.Errorf("candidate %d: %v", i, *c)
 		}
