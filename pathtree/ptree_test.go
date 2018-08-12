@@ -35,6 +35,7 @@ func getPathTreeWithVar(t *PathTree) *PathTree {
 	t.Add("/tt/pc/a:item_id", "tt_item")
 	t.Add("/tt/pc/a:group_id", "tt_group")
 	t.Add("/item/:item_id", "tt_item")
+	t.Add("/i:item_id/info/", "m_info")
 	t.Add("/group/:group_id", "tt_group")
 	t.Add("/service/:version/information/:group_id/", "app_info")
 	t.Add("/aw/v1/:search_type/search/", "aw_search")
@@ -104,7 +105,7 @@ func TestTreeWithVar(t *testing.T) {
 	if len(cands) != 1 || cands[0].Value != "aw_search" || cands[0].Variables["search_type"] != "discover" {
 		t.Errorf("/aw/v1/discover/search/ get err")
 	}
-	cands = tree.GetCandidateLeafs("/aweme/v1/aweme/post/")
+	cands = tree.GetCandidateLeafs("/aw/v1/aw/post/")
 	if len(cands) > 0 {
 		t.Errorf("/aw/v1/post/ candidates: %v", cands)
 		for i, c := range cands {
@@ -135,6 +136,15 @@ func TestTreeWithVar(t *testing.T) {
 			t.Errorf("candidate %d: %v", i, *c)
 		}
 	}
+
+	cands = tree.GetCandidateLeafs("/i6588031967848038915/info/")
+	if len(cands) == 0 || cands[0].Value != "m_info" || cands[0].Variables["item_id"] != "6588031967848038915" {
+		t.Errorf("/i:item/info/ err: %v", cands)
+		for i, c := range cands {
+			t.Errorf("candidate %d: %v", i, *c)
+		}
+	}
+
 }
 
 func TestCTrieAddSame(t *testing.T) {

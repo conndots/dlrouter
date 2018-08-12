@@ -19,6 +19,7 @@ type Target struct {
 	Value interface{}
 	Variables map[string]string
 }
+
 type DomainRouter struct {
 	Domain               string
 	LocationExactSearch  map[string][]interface{}
@@ -194,6 +195,8 @@ func (m *DomainLocationRouter) getDomainManagerIterator(domain string) func() (*
 		return man, ok
 	}
 }
+
+func (dm *DomainLocationRouter) GetRouterInfoOfDomain(domain string)
 
 func (dm *DomainRouter) getTargetsForPath(path string, getAll bool) ([]*Target, bool) {
 	targets := make([]*Target, 0, 1)
