@@ -192,7 +192,7 @@ func (m *DomainLocationRouter) getDomainManagerIterator(domain string) func() (*
 
 		var man *DomainRouter
 		ok := false
-		for man, ok = GetNextInStage(currentStage); currentStage < 2; man, ok = GetNextInStage(currentStage) {
+		for man, ok = GetNextInStage(currentStage); currentStage < 3; man, ok = GetNextInStage(currentStage) {
 			if !ok {
 				//upgrade stage
 				currentStage++
@@ -204,6 +204,9 @@ func (m *DomainLocationRouter) getDomainManagerIterator(domain string) func() (*
 				iteredDomains[man.Domain] = 1
 				break
 			}
+		}
+		if currentStage > 2 {
+			return nil, false
 		}
 
 		return man, ok
