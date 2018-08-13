@@ -28,7 +28,6 @@ func getPreparedCTrie() *PathTree {
 	trie.Print()
 	return trie
 }
-
 func getPathTreeWithVar(t *PathTree) *PathTree {
 	t.Add("/aw/v:version/user/:user_id", "aw_user")
 	t.Add("/aw/v:version/poi/feed/", "aw_poi_feed")

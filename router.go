@@ -13,7 +13,7 @@ var (
 )
 type RegexTarget struct {
 	RegexExp *regexp.Regexp
-	Target   interface{}
+	Targets  []interface{}
 }
 type Target struct {
 	Value interface{}
@@ -24,7 +24,7 @@ type DomainRouter struct {
 	Domain               string
 	LocationExactSearch  map[string][]interface{}
 	LocationPrefixSearch *pathtree.PathTree
-	LocationRegexSearch  []*RegexTarget
+	LocationRegexSearch  map[string]*RegexTarget
 }
 
 type DomainLocationRouter struct {
@@ -33,12 +33,12 @@ type DomainLocationRouter struct {
 	DomainPrefixSearch  *pathtree.PathTree
 }
 
-func newDomainRounter(domain string) *DomainRouter {
+func newDomainRouter(domain string) *DomainRouter {
 	return &DomainRouter{
 		Domain:               domain,
-		LocationExactSearch:  make(map[string][]interface{}),
+		LocationExactSearch:  make(map[string][]interface{}, 3),
 		LocationPrefixSearch: pathtree.NewPathTree(),
-		LocationRegexSearch:  make([]*RegexTarget, 0, 3),
+		LocationRegexSearch:  make(map[string]*RegexTarget, 3),
 	}
 }
 
@@ -69,10 +69,16 @@ func (dm *DomainRouter) appendConf(dconf *domainConf) error {
 			if err != nil {
 				return err
 			} else {
-				dm.LocationRegexSearch = append(dm.LocationRegexSearch, &RegexTarget{
-					RegexExp: regexExp,
-					Target:   dconf.Target,
-				})
+				target, exist := dm.LocationRegexSearch[remain]
+				if exist {
+					target.Targets = append(target.Targets, dconf.Target)
+				} else {
+					target = &RegexTarget{
+						RegexExp: regexExp,
+						Targets: []interface{}{dconf.Target},
+					}
+					dm.LocationRegexSearch[remain] = target
+				}
 			}
 		} else {
 			dm.LocationPrefixSearch.Add(location, dconf.Target)
@@ -101,7 +107,7 @@ func NewRouter(locationConfs []*LocationConf) (*DomainLocationRouter, error) {
 					return nil, err
 				}
 			} else {
-				newMan := newDomainRounter(conf.Domain)
+				newMan := newDomainRouter(conf.Domain)
 				err := newMan.appendConf(conf)
 				if err != nil {
 					return nil, err
@@ -234,7 +240,11 @@ func (dm *DomainRouter) getTargetsForPath(path string, getAll bool) ([]*Target, 
 	for _, regexTar := range dm.LocationRegexSearch {
 		match := regexTar.RegexExp.Find(pathBytes)
 		if match != nil {
-			targets = append(targets, &Target{Value: regexTar.Target})
+			for _, t := range regexTar.Targets {
+				targets = append(targets, &Target{
+					Value: t,
+				})
+			}
 			if !getAll {
 				return targets, true
 			}

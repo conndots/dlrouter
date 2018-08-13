@@ -82,7 +82,7 @@ func (ct *PathTree) Add(str string, value interface{}) error {
 	ct.Size++
 
 	if ct.Size == 1 {
-		ct.path = str
+		ct.path = getPathEndingAtVar(str)
 		ct.nodeType = NodeTypeRoot
 	}
 loopStart:
