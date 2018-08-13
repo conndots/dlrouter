@@ -260,8 +260,6 @@ func (m *DomainLocationRouter) GetTarget(domain string, path string) (*Target, b
 		targets, matched := dm.getTargetsForPath(path, false)
 		if matched {
 			return targets[0], true
-		} else {
-			dm.LocationPrefixSearch.Print()
 		}
 	}
 	return nil, false
