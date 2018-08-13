@@ -332,7 +332,9 @@ func (ct *PathTree) GetCandidateLeafs(target string) (candidates []*TargetCandid
 	return candidates
 }
 
-func (ct *PathTree) Print() {
+func (ct *PathTree) String() string {
+	var buf bytes.Buffer
+
 	type Node struct {
 		node  *PathTree
 		depth int
@@ -340,14 +342,13 @@ func (ct *PathTree) Print() {
 	queue := make([]*Node, 0, 10)
 	queue = append(queue, &Node{node: ct, depth: 0})
 	currDepth := 0
-	fmt.Println("-------------------------")
 	for len(queue) > 0 {
 		curr := queue[0]
 		queue = queue[1:]
 
 		depth := curr.depth
 		if depth > currDepth {
-			fmt.Println()
+			buf.WriteByte('\n')
 			currDepth = depth
 		}
 		var valStr bytes.Buffer
@@ -364,12 +365,26 @@ func (ct *PathTree) Print() {
 			varStr.WriteString(",")
 		}
 		varStr.WriteByte(']')
-		fmt.Print("[", curr.node.path, " depth(", depth, ") nodeType:", curr.node.nodeType, " value:",
-			valStr.String(), " vars:", varStr.String(), "]\t")
+		buf.WriteByte('[')
+		buf.WriteString(curr.node.path)
+		buf.WriteString(" depth(")
+		buf.WriteString(fmt.Sprint(depth))
+		buf.WriteString(") nodeType:")
+		buf.WriteString(fmt.Sprint(curr.node.nodeType))
+		buf.WriteString(" value:")
+		buf.WriteString(valStr.String())
+		buf.WriteString(" vars:")
+		buf.WriteString(varStr.String())
+		buf.WriteString("]\t")
 
 		for _, sub := range curr.node.childrenIdx {
 			queue = append(queue, &Node{node: sub, depth: depth + 1})
 		}
 	}
+	return buf.String()
+}
+func (ct *PathTree) Print() {
+	fmt.Println("-------------------------")
+	fmt.Println(ct.String())
 	fmt.Println("\n-------------------------")
 }
