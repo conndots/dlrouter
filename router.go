@@ -138,7 +138,8 @@ func NewRouter(locationConfs []*LocationConf) (*DomainLocationRouter, error) {
 func (m *DomainLocationRouter) getDomainManagerIterator(domain string) func() (*DomainRouter, bool) {
 	currentStage := 0
 	stageIdx := 0
-	stageCandidates := make([]*DomainRouter, 2)
+	stageCandidates := make([]*DomainRouter, 0, 2)
+	iteredDomains := make(map[string]byte, 3)
 
 	return func() (*DomainRouter, bool) {
 		GetNextInStage := func(stage int) (*DomainRouter, bool) {
@@ -191,11 +192,18 @@ func (m *DomainLocationRouter) getDomainManagerIterator(domain string) func() (*
 
 		var man *DomainRouter
 		ok := false
-		for man, ok = GetNextInStage(currentStage); currentStage < 2 && !ok; man, ok = GetNextInStage(currentStage) {
-			//upgrade stage
-			currentStage++
-			stageCandidates = make([]*DomainRouter, 0, 0)
-			stageIdx = 0
+		for man, ok = GetNextInStage(currentStage); currentStage < 2; man, ok = GetNextInStage(currentStage) {
+			if !ok {
+				//upgrade stage
+				currentStage++
+				stageCandidates = make([]*DomainRouter, 0, 0)
+				stageIdx = 0
+			} else if _, itered := iteredDomains[man.Domain]; itered {
+				continue
+			} else {
+				iteredDomains[man.Domain] = 1
+				break
+			}
 		}
 
 		return man, ok
