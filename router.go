@@ -2,7 +2,6 @@ package dlrouter
 
 import (
 	"errors"
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -258,7 +257,6 @@ func (m *DomainLocationRouter) GetTarget(domain string, path string) (*Target, b
 	dmanIterator := m.getDomainManagerIterator(domain)
 
 	for dm, present := dmanIterator(); present; dm, present = dmanIterator() {
-		fmt.Println(dm.Domain)
 		targets, matched := dm.getTargetsForPath(path, false)
 		if matched {
 			return targets[0], true
