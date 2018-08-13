@@ -196,8 +196,6 @@ func (m *DomainLocationRouter) getDomainManagerIterator(domain string) func() (*
 	}
 }
 
-func (dm *DomainLocationRouter) GetRouterInfoOfDomain(domain string)
-
 func (dm *DomainRouter) getTargetsForPath(path string, getAll bool) ([]*Target, bool) {
 	targets := make([]*Target, 0, 1)
 	//首先寻求精确匹配
@@ -255,6 +253,25 @@ func (m *DomainLocationRouter) GetTarget(domain string, path string) (*Target, b
 		}
 	}
 	return nil, false
+}
+
+func (m *DomainLocationRouter) GetRouterInfosOfDomain(domain string) ([]*DomainRouter, bool) {
+	routers := make([]*DomainRouter, 0, 1)
+
+	dmanIter := m.getDomainManagerIterator(domain)
+	for dm, present := dmanIter(); present; dm, present = dmanIter() {
+		routers = append(routers, dm)
+	}
+	return routers, len(routers) > 0
+}
+
+func (m *DomainLocationRouter) GetAllRouterInfos() []*DomainRouter {
+	routers := make([]*DomainRouter, 0, len(m.DomainExactSearch))
+
+	for _, dm := range m.DomainExactSearch {
+		routers = append(routers, dm)
+	}
+	return routers
 }
 
 func (m *DomainLocationRouter) GetAllTargets(domain string, path string) ([]*Target, bool) {
