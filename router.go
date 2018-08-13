@@ -8,6 +8,9 @@ import (
 	"github.com/conndots/dlrouter/pathtree"
 )
 
+const (
+	domainSearchStageNum = 3
+)
 var (
 	NotSameDomainErr = errors.New("domains are not identical")
 )
@@ -138,7 +141,8 @@ func NewRouter(locationConfs []*LocationConf) (*DomainLocationRouter, error) {
 func (m *DomainLocationRouter) getDomainManagerIterator(domain string) func() (*DomainRouter, bool) {
 	currentStage := 0
 	stageIdx := 0
-	stageCandidates := make([]*DomainRouter, 2)
+	stageCandidates := make([]*DomainRouter, 0, 2)
+	iteredManagers := make(map[*DomainRouter]byte, domainSearchStageNum)
 
 	return func() (*DomainRouter, bool) {
 		GetNextInStage := func(stage int) (*DomainRouter, bool) {
@@ -185,20 +189,26 @@ func (m *DomainLocationRouter) getDomainManagerIterator(domain string) func() (*
 			}
 		}
 
-		if currentStage >= 2 {
+		if currentStage >= domainSearchStageNum {
 			return nil, false
 		}
 
 		var man *DomainRouter
 		ok := false
-		for man, ok = GetNextInStage(currentStage); currentStage < 2 && !ok; man, ok = GetNextInStage(currentStage) {
-			//upgrade stage
-			currentStage++
-			stageCandidates = make([]*DomainRouter, 0, 0)
-			stageIdx = 0
+		for man, ok = GetNextInStage(currentStage); currentStage < domainSearchStageNum; man, ok = GetNextInStage(currentStage) {
+			if !ok {
+				//upgrade stage
+				currentStage++
+				stageCandidates = make([]*DomainRouter, 0, 0)
+				stageIdx = 0
+			} else if _, itered := iteredManagers[man]; itered {
+				continue
+			} else {
+				iteredManagers[man] = 1
+				return man, ok
+			}
 		}
-
-		return man, ok
+		return nil, false
 	}
 }
 

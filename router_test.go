@@ -40,6 +40,11 @@ var test0Conf = `- domains:
     - ~ /api/hotsoon/video/detail/[0-9]+
     - = /common/api/
     - /admin
+- domains:
+    - 10.3.23.
+  locations:
+    - /wenda/web/feed/brow/
+
 `
 var test1Conf = `- domains:
     - neihan.bytedance.com
@@ -173,10 +178,14 @@ func TestGetTarget(t *testing.T) {
 	if exist {
 		t.Errorf("get target error. expected: %v %v; got: %v %v", false, nil, exist, target)
 	}
-	target, exist = sm.GetTarget("10.3.23.40:9009", "/wenda/web/feed/brow/")
+	targets, exist := sm.GetAllTargets("10.3.23.40:9009", "/wenda/web/feed/brow/")
 
-	if !exist {
+	if !exist || len(targets) != 2 {
 		t.Errorf("get target error.")
+		fmt.Println("Targets:")
+		for i, target := range targets {
+			fmt.Printf("%d: %v\n", i, target.Value)
+		}
 	}
 
 	target, exist = sm.GetTarget("products.byted.org", "/info/4/group/12345/comments/")
