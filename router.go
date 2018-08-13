@@ -202,14 +202,10 @@ func (m *DomainLocationRouter) getDomainManagerIterator(domain string) func() (*
 				continue
 			} else {
 				iteredDomains[man.Domain] = 1
-				break
+				return man, ok
 			}
 		}
-		if currentStage > 2 {
-			return nil, false
-		}
-
-		return man, ok
+		return nil, false
 	}
 }
 
