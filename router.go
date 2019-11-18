@@ -2,6 +2,7 @@ package dlrouter
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -12,7 +13,7 @@ const (
 	domainSearchStageNum = 3
 )
 var (
-	NotSameDomainErr = errors.New("domains are not identical")
+	NotSameDomainErr = errors.New("[dlrouter compile] domains are not identical")
 )
 type RegexTarget struct {
 	RegexExp *regexp.Regexp
@@ -45,10 +46,15 @@ func newDomainRouter(domain string) *DomainRouter {
 	}
 }
 
-func (dm *DomainRouter) appendConf(dconf *domainConf) error {
+func (dm *DomainRouter) newCompileError(location string, err error) error {
+	return fmt.Errorf("[dlrouter compile] Compile Error: %v. Domain: %s. Location: %s", err, dm.Domain, location)
+}
+func (dm *DomainRouter) appendConf(dconf *domainConf) []error {
 	if dconf.Domain != dm.Domain {
-		return NotSameDomainErr
+		return []error{NotSameDomainErr}
 	}
+
+	errs := make([]error, 0, 2)
 
 	for _, location := range dconf.Locations {
 		location = strings.TrimSpace(location)
@@ -70,7 +76,8 @@ func (dm *DomainRouter) appendConf(dconf *domainConf) error {
 			remain := strings.TrimSpace(location[2:])
 			regexExp, err := regexp.Compile(remain)
 			if err != nil {
-				return err
+				errs = append(errs, dm.newCompileError(location, err))
+				continue
 			} else {
 				target, exist := dm.LocationRegexSearch[remain]
 				if exist {
@@ -84,37 +91,38 @@ func (dm *DomainRouter) appendConf(dconf *domainConf) error {
 				}
 			}
 		} else {
-			dm.LocationPrefixSearch.Add(location, dconf.Target)
+			err := dm.LocationPrefixSearch.Add(location, dconf.Target)
+			if err != nil {
+				errs = append(errs, dm.newCompileError(location, err))
+			}
 		}
 
 	}
-	return nil
-
+	return errs
 }
 
-func NewRouter(locationConfs []*LocationConf) (*DomainLocationRouter, error) {
+func NewRouter(locationConfs []*LocationConf) (*DomainLocationRouter, []error) {
 	domainExactSearch := make(map[string]*DomainRouter)
+
+	allErrs := make([]error, 0, 3)
 	for _, lconf := range locationConfs {
 		if len(lconf.MappingConf) == 0 || lconf.Target == nil {
 			continue
 		}
 		confs, err := getDomainConfs(lconf)
 		if err != nil {
-			return nil, err
+			allErrs = append(allErrs, err)
+			continue
 		}
 
 		for _, conf := range confs {
 			if man, existed := domainExactSearch[conf.Domain]; existed {
-				err := man.appendConf(conf)
-				if err != nil {
-					return nil, err
-				}
+				appErrs := man.appendConf(conf)
+				allErrs = append(allErrs, appErrs...)
 			} else {
 				newMan := newDomainRouter(conf.Domain)
-				err := newMan.appendConf(conf)
-				if err != nil {
-					return nil, err
-				}
+				appErrs := newMan.appendConf(conf)
+				allErrs = append(allErrs, appErrs...)
 				domainExactSearch[conf.Domain] = newMan
 			}
 		}
@@ -128,13 +136,19 @@ func NewRouter(locationConfs []*LocationConf) (*DomainLocationRouter, error) {
 
 	for domain, man := range domainExactSearch {
 		domainBytes := []byte(domain)
-		ins.DomainPrefixSearch.Add(domain, man)
+		pErr := ins.DomainPrefixSearch.Add(domain, man)
+		if pErr != nil {
+			allErrs = append(allErrs, pErr)
+		}
 
 		domainBytesRev := GetReversedBytes(domainBytes)
-		ins.DomainPostfixSearch.Add(string(domainBytesRev), man)
+		rpErr := ins.DomainPostfixSearch.Add(string(domainBytesRev), man)
+		if rpErr != nil {
+			allErrs = append(allErrs, rpErr)
+		}
 	}
 
-	return ins, nil
+	return ins, allErrs
 }
 
 //Iterator Pattern using Closure
