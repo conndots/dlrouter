@@ -18,18 +18,18 @@ type MappingBlock struct {
 	Locations []string `yaml:"locations,omitempty" json:"locations,omitempty"`
 }
 
-type domainConf struct {
+type DomainConf struct {
 	Domain    string
 	Locations []string
 	Target    interface{}
 }
 
-func getDomainConfs(conf *LocationConf) ([]*domainConf, error) {
+func GetDomainConfs(conf *LocationConf) ([]*DomainConf, error) {
 	blocks := conf.MappingConf
-	confs := make([]*domainConf, 0, len(blocks)*3/2)
+	confs := make([]*DomainConf, 0, len(blocks)*3/2)
 	for _, block := range blocks {
 		for _, domain := range block.Domains {
-			confs = append(confs, &domainConf{
+			confs = append(confs, &DomainConf{
 				Domain:    domain,
 				Locations: block.Locations,
 				Target:    conf.Target,
