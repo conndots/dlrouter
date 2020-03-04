@@ -37,7 +37,7 @@ type DomainLocationRouter struct {
 	DomainPrefixSearch  *pathtree.PathTree
 }
 
-func newDomainRouter(domain string) *DomainRouter {
+func NewDomainRouter(domain string) *DomainRouter {
 	return &DomainRouter{
 		Domain:               domain,
 		LocationExactSearch:  make(map[string][]interface{}, 3),
@@ -49,7 +49,7 @@ func newDomainRouter(domain string) *DomainRouter {
 func (dm *DomainRouter) newCompileError(location string, err error) error {
 	return fmt.Errorf("[dlrouter compile] Compile Error: %v. Domain: %s. Location: %s", err, dm.Domain, location)
 }
-func (dm *DomainRouter) appendConf(dconf *domainConf) []error {
+func (dm *DomainRouter) AppendConf(dconf *DomainConf) []error {
 	if dconf.Domain != dm.Domain {
 		return []error{NotSameDomainErr}
 	}
@@ -101,6 +101,58 @@ func (dm *DomainRouter) appendConf(dconf *domainConf) []error {
 	return errs
 }
 
+func (dm *DomainRouter) GetTargetsForPath(path string, getAll bool) ([]*Target, bool) {
+	targets := make([]*Target, 0, 1)
+	//首先寻求精确匹配
+	tlist, present := dm.LocationExactSearch[path]
+	if present && len(tlist) > 0 {
+		if !getAll {
+			targets = append(targets, &Target{
+				Value: tlist[0],
+			})
+			return targets, true
+		}
+		for _, t := range tlist {
+			targets = append(targets, &Target{
+				Value: t,
+			})
+		}
+	}
+
+	//前缀匹配
+	pathBytes := []byte(path)
+	if dm.LocationPrefixSearch.Size > 0 {
+		candidates := dm.LocationPrefixSearch.GetCandidateLeafs(path)
+		if len(candidates) > 0 {
+			for _, candidate := range candidates {
+				targets = append(targets, &Target{
+					Value: candidate.Value,
+					Variables: candidate.Variables,
+				})
+			}
+			if !getAll {
+				return targets, true
+			}
+		}
+	}
+
+	for _, regexTar := range dm.LocationRegexSearch {
+		match := regexTar.RegexExp.Find(pathBytes)
+		if match != nil {
+			for _, t := range regexTar.Targets {
+				targets = append(targets, &Target{
+					Value: t,
+				})
+			}
+			if !getAll {
+				return targets, true
+			}
+		}
+	}
+	return targets, len(targets) > 0
+}
+
+
 func NewRouter(locationConfs []*LocationConf) (*DomainLocationRouter, []error) {
 	domainExactSearch := make(map[string]*DomainRouter)
 
@@ -109,7 +161,7 @@ func NewRouter(locationConfs []*LocationConf) (*DomainLocationRouter, []error) {
 		if len(lconf.MappingConf) == 0 || lconf.Target == nil {
 			continue
 		}
-		confs, err := getDomainConfs(lconf)
+		confs, err := GetDomainConfs(lconf)
 		if err != nil {
 			allErrs = append(allErrs, err)
 			continue
@@ -117,11 +169,11 @@ func NewRouter(locationConfs []*LocationConf) (*DomainLocationRouter, []error) {
 
 		for _, conf := range confs {
 			if man, existed := domainExactSearch[conf.Domain]; existed {
-				appErrs := man.appendConf(conf)
+				appErrs := man.AppendConf(conf)
 				allErrs = append(allErrs, appErrs...)
 			} else {
-				newMan := newDomainRouter(conf.Domain)
-				appErrs := newMan.appendConf(conf)
+				newMan := NewDomainRouter(conf.Domain)
+				appErrs := newMan.AppendConf(conf)
 				allErrs = append(allErrs, appErrs...)
 				domainExactSearch[conf.Domain] = newMan
 			}
@@ -226,56 +278,6 @@ func (m *DomainLocationRouter) getDomainManagerIterator(domain string) func() (*
 	}
 }
 
-func (dm *DomainRouter) GetTargetsForPath(path string, getAll bool) ([]*Target, bool) {
-	targets := make([]*Target, 0, 1)
-	//首先寻求精确匹配
-	tlist, present := dm.LocationExactSearch[path]
-	if present && len(tlist) > 0 {
-		if !getAll {
-			targets = append(targets, &Target{
-				Value: tlist[0],
-			})
-			return targets, true
-		}
-		for _, t := range tlist {
-			targets = append(targets, &Target{
-				Value: t,
-			})
-		}
-	}
-
-	//前缀匹配
-	pathBytes := []byte(path)
-	if dm.LocationPrefixSearch.Size > 0 {
-		candidates := dm.LocationPrefixSearch.GetCandidateLeafs(path)
-		if len(candidates) > 0 {
-			for _, candidate := range candidates {
-				targets = append(targets, &Target{
-					Value: candidate.Value,
-					Variables: candidate.Variables,
-				})
-			}
-			if !getAll {
-				return targets, true
-			}
-		}
-	}
-
-	for _, regexTar := range dm.LocationRegexSearch {
-		match := regexTar.RegexExp.Find(pathBytes)
-		if match != nil {
-			for _, t := range regexTar.Targets {
-				targets = append(targets, &Target{
-					Value: t,
-				})
-			}
-			if !getAll {
-				return targets, true
-			}
-		}
-	}
-	return targets, len(targets) > 0
-}
 
 func (m *DomainLocationRouter) GetTarget(domain string, path string) (*Target, bool) {
 	dmanIterator := m.getDomainManagerIterator(domain)
